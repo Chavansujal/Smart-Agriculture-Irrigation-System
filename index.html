@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart AIoT Irrigation & ESP32 Live Sync Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --card-bg: rgba(18, 26, 43, 0.75);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-emerald: #10b981;
+            --accent-emerald-glow: rgba(16, 185, 129, 0.3);
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.12) 0%, transparent 40%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--card-border);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--accent-emerald), var(--accent-cyan));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #000;
+            box-shadow: 0 0 20px var(--accent-emerald-glow);
+        }
+
+        .brand-text h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent-emerald);
+            transition: all 0.3s;
+        }
+
+        .status-badge.offline {
+            background: rgba(244, 63, 94, 0.1);
+            border-color: rgba(244, 63, 94, 0.3);
+            color: var(--accent-rose);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-emerald);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-emerald);
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.offline .status-dot {
+            background-color: var(--accent-rose);
+            box-shadow: 0 0 10px var(--accent-rose);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.2); }
+        }
+
+        .mode-pill {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: border-color 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #f1f5f9;
+        }
+
+        .card-title-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title i {
+            color: var(--accent-cyan);
+        }
+
+        /* Controls & Form Elements */
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .sensor-control {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 14px;
+            border-radius: 14px;
+        }
+
+        .sensor-control label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .sensor-value {
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+            accent-color: var(--accent-emerald);
+            cursor: pointer;
+        }
+
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 14px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-emerald);
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active-green {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--accent-emerald);
+            color: var(--accent-emerald);
+        }
+
+        .toggle-btn.active-red {
+            background: rgba(244, 63, 94, 0.2);
+            border-color: var(--accent-rose);
+            color: var(--accent-rose);
+        }
+
+        /* Predict Output Display */
+        .output-main {
+            text-align: center;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .action-banner {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 28px;
+            border-radius: 40px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .banner-on {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2));
+            border: 1px solid var(--accent-emerald);
+            color: var(--accent-emerald);
+            box-shadow: 0 0 25px var(--accent-emerald-glow);
+        }
+
+        .banner-off {
+            background: rgba(100, 116, 139, 0.15);
+            border: 1px solid var(--text-muted);
+            color: var(--text-secondary);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 16px;
+            border-radius: 14px;
+            text-align: center;
+        }
+
+        .stat-box label {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .stat-box .val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .btn-predict {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-emerald), var(--accent-cyan));
+            border: none;
+            border-radius: 12px;
+            color: #000;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 20px var(--accent-emerald-glow);
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            opacity: 0.95;
+        }
+
+        /* Mode Selector buttons */
+        .mode-btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .mode-btn.active {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: var(--accent-emerald);
+            color: var(--accent-emerald);
+            box-shadow: 0 0 15px var(--accent-emerald-glow);
+        }
+
+        /* Chart container */
+        .chart-container {
+            position: relative;
+            height: 220px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Header -->
+    <div class="dashboard-header">
+        <div class="brand">
+            <div class="brand-icon">
+                <i class="fa-solid fa-droplet"></i>
+            </div>
+            <div class="brand-text">
+                <h1>Smart AIoT Irrigation Dashboard</h1>
+                <p>Real-time ESP32 Hardware Synchronization & AI Model Runtime Control</p>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div class="mode-pill" id="active-mode-pill">Mode: AI_AUTO</div>
+            <div class="status-badge" id="esp32-status-badge">
+                <div class="status-dot"></div>
+                <span id="esp32-status-text">ESP32 Syncing...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="grid-container">
+
+        <!-- Left Column: Operational Controls & Hardware Telemetry -->
+        <div class="card">
+            <div class="card-title">
+                <div class="card-title-left">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>System Operating Mode</span>
+                </div>
+            </div>
+
+            <!-- Mode Selector -->
+            <div class="mode-btn-group">
+                <button class="mode-btn active" id="btn-mode-ai" onclick="setSystemMode('AI_AUTO')">
+                    <i class="fa-solid fa-robot"></i> AI Model Auto
+                </button>
+                <button class="mode-btn" id="btn-mode-thresh" onclick="setSystemMode('THRESHOLD_AUTO')">
+                    <i class="fa-solid fa-gauge-high"></i> Threshold Auto
+                </button>
+                <button class="mode-btn" id="btn-mode-manual" onclick="setSystemMode('MANUAL')">
+                    <i class="fa-solid fa-hand"></i> Manual Switch
+                </button>
+            </div>
+
+            <div class="card-title" style="font-size: 15px; margin-top: 10px; margin-bottom: 14px;">
+                <div class="card-title-left">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>ESP32 Hardware Sensor Telemetry</span>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted);" id="last-sync-time">Polling live data...</span>
+            </div>
+
+            <div class="sensor-grid">
+                <div class="sensor-control">
+                    <label><span><i class="fa-solid fa-temperature-half"></i> Temperature</span> <span class="sensor-value" id="val-temp">-- °C</span></label>
+                    <input type="range" id="input-temp" min="10" max="50" step="0.5" value="28.5" oninput="manualSliderChange()">
+                </div>
+                <div class="sensor-control">
+                    <label><span><i class="fa-solid fa-droplet"></i> Humidity</span> <span class="sensor-value" id="val-hum">-- %</span></label>
+                    <input type="range" id="input-hum" min="10" max="100" step="1" value="40" oninput="manualSliderChange()">
+                </div>
+                <div class="sensor-control">
+                    <label><span><i class="fa-solid fa-seedling"></i> Soil Value (ADC)</span> <span class="sensor-value" id="val-soil">--</span></label>
+                    <input type="range" id="input-soil" min="0" max="4095" step="10" value="450" oninput="manualSliderChange()">
+                </div>
+                <div class="sensor-control">
+                    <label><span><i class="fa-solid fa-sun"></i> Light Value (LDR)</span> <span class="sensor-value" id="val-light">--</span></label>
+                    <input type="range" id="input-light" min="0" max="4095" step="50" value="1200" oninput="manualSliderChange()">
+                </div>
+                <div class="sensor-control">
+                    <label><span><i class="fa-solid fa-water"></i> Water Level (Tank)</span> <span class="sensor-value" id="val-water">--</span></label>
+                    <input type="range" id="input-water" min="0" max="4095" step="50" value="1800" oninput="manualSliderChange()">
+                </div>
+            </div>
+
+            <!-- Toggles for Digital Sensors -->
+            <div class="card-title" style="font-size: 15px; margin-top: 10px; margin-bottom: 12px;">
+                <div class="card-title-left">
+                    <i class="fa-solid fa-toggle-on"></i> Sensor Flags & Physical Relay
+                </div>
+            </div>
+            <div class="toggle-group">
+                <button class="toggle-btn active-red" id="btn-rain" onclick="toggleRain()">Rain: NO</button>
+                <button class="toggle-btn active-red" id="btn-soil" onclick="toggleSoil()">Soil: DRY</button>
+                <button class="toggle-btn active-green" id="btn-tank" onclick="toggleTank()">Tank: AVAILABLE</button>
+                <button class="toggle-btn active-red" id="btn-pump-manual" onclick="toggleManualPump()">Pump: OFF</button>
+            </div>
+
+            <!-- Farm Configuration -->
+            <div class="card-title" style="font-size: 15px; margin-top: 10px; margin-bottom: 12px;">
+                <div class="card-title-left">
+                    <i class="fa-solid fa-wheat-awn"></i> Crop & Soil Context Sync
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div>
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Crop Type</label>
+                    <select id="select-crop" onchange="syncFarmSettings()">
+                        <option value="Wheat" selected>Wheat</option>
+                        <option value="Cotton">Cotton</option>
+                        <option value="Maize">Maize</option>
+                        <option value="Rice">Rice</option>
+                        <option value="Sugarcane">Sugarcane</option>
+                        <option value="Vegetables">Vegetables</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Season</label>
+                    <select id="select-season" onchange="syncFarmSettings()">
+                        <option value="Winter" selected>Winter</option>
+                        <option value="Summer">Summer</option>
+                        <option value="Rainy">Rainy</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Growth Stage</label>
+                    <select id="select-growth" onchange="syncFarmSettings()">
+                        <option value="Vegetative" selected>Vegetative</option>
+                        <option value="Flowering">Flowering</option>
+                        <option value="Maturity">Maturity</option>
+                        <option value="Seedling">Seedling</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Soil Type</label>
+                    <select id="select-soiltype" onchange="syncFarmSettings()">
+                        <option value="Loamy" selected>Loamy</option>
+                        <option value="Sandy">Sandy</option>
+                        <option value="Clay">Clay</option>
+                    </select>
+                </div>
+            </div>
+
+            <button class="btn-predict" onclick="triggerManualInference()">
+                <i class="fa-solid fa-bolt"></i> Run Manual AI Inference
+            </button>
+        </div>
+
+        <!-- Right Column: AI Model Output & Live Visualizations -->
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+            
+            <!-- Output Decision Card -->
+            <div class="card">
+                <div class="card-title">
+                    <div class="card-title-left">
+                        <i class="fa-solid fa-brain"></i>
+                        <span>AI Model Decision & Pump Output</span>
+                    </div>
+                </div>
+
+                <div class="output-main">
+                    <div class="action-banner banner-off" id="action-banner">
+                        <i class="fa-solid fa-power-off"></i>
+                        <span id="action-text">PUMP_OFF</span>
+                    </div>
+                    <p style="font-size: 14px; color: var(--text-secondary);" id="status-reason">
+                        Reason: Syncing with AI Model...
+                    </p>
+                </div>
+
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <label>Water Required</label>
+                        <div class="val" id="res-water">0.0 L</div>
+                    </div>
+                    <div class="stat-box">
+                        <label>Pump Flow</label>
+                        <div class="val" id="res-flow">2.5 L/m</div>
+                    </div>
+                    <div class="stat-box">
+                        <label>Pump Runtime</label>
+                        <div class="val" id="res-runtime" style="color: var(--accent-cyan);">0 s</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Chart Card -->
+            <div class="card">
+                <div class="card-title">
+                    <div class="card-title-left">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span>Real-time Water Volume Prediction Curve</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="telemetryChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let isRain = "NO";
+        let isSoil = "DRY";
+        let isTank = "AVAILABLE";
+        let manualPumpState = false;
+        let currentMode = "AI_AUTO";
+        let isUserDraggingSlider = false;
+
+        function toggleRain() {
+            isRain = (isRain === "NO") ? "YES" : "NO";
+            updateToggleButtons();
+            syncFarmSettings();
+        }
+
+        function toggleSoil() {
+            isSoil = (isSoil === "DRY") ? "WET" : "DRY";
+            updateToggleButtons();
+            syncFarmSettings();
+        }
+
+        function toggleTank() {
+            isTank = (isTank === "AVAILABLE") ? "EMPTY" : "AVAILABLE";
+            updateToggleButtons();
+            syncFarmSettings();
+        }
+
+        function toggleManualPump() {
+            manualPumpState = !manualPumpState;
+            updateToggleButtons();
+            fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ manual_pump_state: manualPumpState })
+            });
+        }
+
+        function updateToggleButtons() {
+            const bRain = document.getElementById("btn-rain");
+            bRain.innerText = "Rain: " + isRain;
+            bRain.className = "toggle-btn " + (isRain === "YES" ? "active-green" : "active-red");
+
+            const bSoil = document.getElementById("btn-soil");
+            bSoil.innerText = "Soil: " + isSoil;
+            bSoil.className = "toggle-btn " + (isSoil === "WET" ? "active-green" : "active-red");
+
+            const bTank = document.getElementById("btn-tank");
+            bTank.innerText = "Tank: " + isTank;
+            bTank.className = "toggle-btn " + (isTank === "AVAILABLE" ? "active-green" : "active-red");
+
+            const bPump = document.getElementById("btn-pump-manual");
+            bPump.innerText = "Pump: " + (manualPumpState ? "ON" : "OFF");
+            bPump.className = "toggle-btn " + (manualPumpState ? "active-green" : "active-red");
+        }
+
+        async function setSystemMode(mode) {
+            currentMode = mode;
+            document.getElementById("btn-mode-ai").className = "mode-btn " + (mode === "AI_AUTO" ? "active" : "");
+            document.getElementById("btn-mode-thresh").className = "mode-btn " + (mode === "THRESHOLD_AUTO" ? "active" : "");
+            document.getElementById("btn-mode-manual").className = "mode-btn " + (mode === "MANUAL" ? "active" : "");
+            document.getElementById("active-mode-pill").innerText = "Mode: " + mode;
+
+            await fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: mode })
+            });
+            pollTelemetry();
+        }
+
+        async function syncFarmSettings() {
+            const crop = document.getElementById('select-crop').value;
+            const season = document.getElementById('select-season').value;
+            const growth = document.getElementById('select-growth').value;
+            const soiltype = document.getElementById('select-soiltype').value;
+
+            await fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    crop: crop,
+                    season: season,
+                    growth_stage: growth,
+                    soil_type: soiltype
+                })
+            });
+            triggerManualInference();
+        }
+
+        // Initialize Chart
+        const ctx = document.getElementById('telemetryChart').getContext('2d');
+        const telemetryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['T-4', 'T-3', 'T-2', 'T-1', 'Current'],
+                datasets: [{
+                    label: 'Predicted Water Required (L)',
+                    data: [0, 0, 0, 0, 0],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, beginAtZero: true }
+                }
+            }
+        });
+
+        function manualSliderChange() {
+            document.getElementById('val-temp').innerText = document.getElementById('input-temp').value + ' °C';
+            document.getElementById('val-hum').innerText = document.getElementById('input-hum').value + ' %';
+            document.getElementById('val-soil').innerText = document.getElementById('input-soil').value;
+            document.getElementById('val-light').innerText = document.getElementById('input-light').value;
+            document.getElementById('val-water').innerText = document.getElementById('input-water').value;
+        }
+
+        async function triggerManualInference() {
+            const temp = parseFloat(document.getElementById('input-temp').value);
+            const hum = parseFloat(document.getElementById('input-hum').value);
+            const soil = parseInt(document.getElementById('input-soil').value);
+            const light = parseInt(document.getElementById('input-light').value);
+            const water = parseInt(document.getElementById('input-water').value);
+
+            const payload = {
+                temperature: temp,
+                humidity: hum,
+                soil_value: soil,
+                light_value: light,
+                water_level: water,
+                rain: isRain,
+                soil_status: isSoil,
+                tank_status: isTank,
+                crop: document.getElementById('select-crop').value,
+                season: document.getElementById('select-season').value,
+                growth_stage: document.getElementById('select-growth').value,
+                soil_type: document.getElementById('select-soiltype').value,
+                pump_flow_lpm: 2.5
+            };
+
+            try {
+                const res = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                updateDisplayWithPrediction(data);
+            } catch (err) {
+                console.error("Manual inference error:", err);
+            }
+        }
+
+        function updateDisplayWithPrediction(pred) {
+            const actionBanner = document.getElementById('action-banner');
+            const actionText = document.getElementById('action-text');
+
+            actionText.innerText = pred.action;
+            if (pred.action === 'PUMP_ON') {
+                actionBanner.className = 'action-banner banner-on';
+            } else {
+                actionBanner.className = 'action-banner banner-off';
+            }
+
+            document.getElementById('status-reason').innerText = 'Reason: ' + pred.status_reason;
+            document.getElementById('res-water').innerText = pred.predicted_water_required_l + ' L';
+            document.getElementById('res-flow').innerText = pred.pump_flow_lpm + ' L/m';
+            document.getElementById('res-runtime').innerText = pred.pump_runtime_sec + ' s (' + pred.pump_runtime_min + ' m)';
+
+            const chartData = telemetryChart.data.datasets[0].data;
+            chartData.shift();
+            chartData.push(pred.predicted_water_required_l);
+            telemetryChart.update();
+        }
+
+        async function pollTelemetry() {
+            try {
+                const res = await fetch('/api/telemetry');
+                const state = await res.json();
+
+                const badge = document.getElementById('esp32-status-badge');
+                const statusText = document.getElementById('esp32-status-text');
+
+                if (state.device_online) {
+                    badge.className = 'status-badge';
+                    statusText.innerText = 'ESP32 Hardware Online';
+                } else {
+                    badge.className = 'status-badge offline';
+                    statusText.innerText = 'ESP32 Hardware Offline';
+                }
+
+                if (state.last_seen_timestamp) {
+                    document.getElementById('last-sync-time').innerText = 'Last sync: ' + new Date(state.last_seen_timestamp).toLocaleTimeString();
+                }
+
+                // Update mode
+                if (state.control && state.control.mode) {
+                    currentMode = state.control.mode;
+                    document.getElementById("btn-mode-ai").className = "mode-btn " + (currentMode === "AI_AUTO" ? "active" : "");
+                    document.getElementById("btn-mode-thresh").className = "mode-btn " + (currentMode === "THRESHOLD_AUTO" ? "active" : "");
+                    document.getElementById("btn-mode-manual").className = "mode-btn " + (currentMode === "MANUAL" ? "active" : "");
+                    document.getElementById("active-mode-pill").innerText = "Mode: " + currentMode;
+                }
+
+                // Update Telemetry UI
+                if (state.telemetry) {
+                    const tel = state.telemetry;
+                    document.getElementById('input-temp').value = tel.temperature;
+                    document.getElementById('input-hum').value = tel.humidity;
+                    document.getElementById('input-soil').value = tel.soil_value;
+                    document.getElementById('input-light').value = tel.light_value;
+                    document.getElementById('input-water').value = tel.water_level;
+                    manualSliderChange();
+
+                    isRain = tel.rain || "NO";
+                    isSoil = tel.soil_status || "DRY";
+                    isTank = tel.tank_status || "AVAILABLE";
+                    updateToggleButtons();
+
+                    if (tel.crop) document.getElementById('select-crop').value = tel.crop;
+                    if (tel.season) document.getElementById('select-season').value = tel.season;
+                    if (tel.growth_stage) document.getElementById('select-growth').value = tel.growth_stage;
+                    if (tel.soil_type) document.getElementById('select-soiltype').value = tel.soil_type;
+                }
+
+                // Update AI Prediction
+                if (state.prediction) {
+                    updateDisplayWithPrediction(state.prediction);
+                }
+            } catch (e) {
+                console.error("Telemetry poll failed:", e);
+            }
+        }
+
+        // Poll server every 1.5 seconds
+        setInterval(pollTelemetry, 1500);
+        window.onload = pollTelemetry;
+    </script>
+</body>
+</html>
