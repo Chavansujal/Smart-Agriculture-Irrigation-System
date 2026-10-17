@@ -12,3 +12,4 @@ venv.bak/
 .idea/
 *.log
 .DS_Store
+*.bak

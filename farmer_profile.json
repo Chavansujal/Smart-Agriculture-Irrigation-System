@@ -1,0 +1,15 @@
+{
+  "farmer_name": "Sujal Chavan",
+  "farm_name": "Smart Agriculture Plot #1",
+  "location": "Pune, Maharashtra",
+  "latitude": 18.5204,
+  "longitude": 73.8567,
+  "crop": "Wheat",
+  "growth_stage": "Vegetative",
+  "soil_type": "Loamy",
+  "farm_area": 1.5,
+  "area_unit": "Acres",
+  "irrigation_type": "Drip Irrigation",
+  "daily_water_target_l": 50.0,
+  "pump_flow_lpm": 2.5
+}

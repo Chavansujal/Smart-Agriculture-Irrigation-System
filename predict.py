@@ -3,6 +3,9 @@ import json
 import joblib
 import pandas as pd
 import argparse
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
 
 class SmartIrrigationPredictor:
@@ -81,21 +84,30 @@ class SmartIrrigationPredictor:
             soil_status = str(row['Soil Status']).upper().strip()
 
             # Safety Overrides
-            # 1. Tank Empty -> Cannot pump
-            # 2. Raining -> No irrigation needed
-            # 3. Soil Wet -> No irrigation needed
+            # 1. Tank Empty -> Cannot pump (Dry-Run Protection)
+            # 2. Raining -> No irrigation needed (Natural Precipitation)
+            # 3. Soil Wet -> No irrigation needed (Adequate Moisture)
             if tank_status == 'EMPTY' or rain == 'YES' or soil_status == 'WET':
                 irrigation_required = False
                 action = "PUMP_OFF"
                 runtime_min = 0.0
                 runtime_sec = 0.0
-                reason = "Safety Override: Tank Empty / Rain active / Soil Wet" if (tank_status == 'EMPTY' or rain == 'YES' or soil_status == 'WET') else "Not Required"
+                if tank_status == 'EMPTY':
+                    reason = "Safety Override: Water Tank Empty (<500 ADC)"
+                elif rain == 'YES':
+                    reason = "Safety Override: Rain Active (Precipitation Detected)"
+                else:
+                    reason = "Safety Override: Soil Wet (Adequate Moisture)"
             else:
-                irrigation_required = model_irr_req
+                # Automatic irrigation required when soil is DRY or AI regressor predicts water needed
+                irrigation_required = model_irr_req or (soil_status == 'DRY') or (predicted_water > 0.5)
                 action = "PUMP_ON" if irrigation_required else "PUMP_OFF"
                 runtime_min = (predicted_water / pump_flow_lpm) if irrigation_required else 0.0
                 runtime_sec = runtime_min * 60.0
-                reason = "Irrigation Required" if irrigation_required else "Moisture Adequate"
+                if irrigation_required:
+                    reason = f"Irrigation Required: Soil Dry ({predicted_water:.1f}L needed)"
+                else:
+                    reason = "Moisture Adequate"
 
             results.append({
                 'predicted_water_required_l': round(predicted_water, 2),
